@@ -1,0 +1,92 @@
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+
+#define SENSOR_PIN A0
+
+// ----------- Calibration (edit with your values) -----------
+int DRY_VALUE = 690;   
+int WET_VALUE = 350;
+
+// ----------- WiFi Credentials (EDIT THESE) -----------
+const char* ssid = "YOUR_WIFI_NAME";
+const char* password = "YOUR_WIFI_PASSWORD";
+
+// ----------- MQTT Broker (from your screenshot) -----------
+const char* mqtt_server = "c946cbf4bb284a01a41608824a6630cb.s1.eu.hivemq.cloud";
+const int mqtt_port = 8883;
+
+// ----------- MQTT Credentials (created in Access Management) -----------
+const char* mqtt_user = "YOUR_MQTT_USERNAME";
+const char* mqtt_pass = "YOUR_MQTT_PASSWORD";
+
+// ----------- Setup MQTT client -----------
+WiFiClientSecure espClient;
+PubSubClient client(espClient);
+
+// Convert soil sensor raw → percent
+int moisturePercent(int raw) {
+  int pct = map(raw, DRY_VALUE, WET_VALUE, 0, 100);
+  return constrain(pct, 0, 100);
+}
+
+void setupWiFi() {
+  Serial.print("Connecting to WiFi: ");
+  Serial.println(ssid);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\nWiFi connected!");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.println("Connecting to MQTT...");
+
+    if (client.connect("esp8266-moisture-sensor", mqtt_user, mqtt_pass)) {
+      Serial.println("MQTT Connected!");
+    } else {
+      Serial.print("MQTT Failed, Code: ");
+      Serial.println(client.state());
+      Serial.println("Retrying in 3 seconds...");
+      delay(3000);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println();
+  Serial.println("Booting...");
+
+  setupWiFi();
+
+  espClient.setInsecure();    // TLS without certs
+  client.setServer(mqtt_server, mqtt_port);
+}
+
+void loop() {
+  if (!client.connected()) reconnect();
+  client.loop();
+
+  int raw = analogRead(SENSOR_PIN);
+  int pct = moisturePercent(raw);
+
+  // Print to serial
+  Serial.print("Raw: ");
+  Serial.print(raw);
+  Serial.print("  Moisture: ");
+  Serial.print(pct);
+  Serial.println("%");
+
+  // Publish to MQTT
+  client.publish("plant/moisture", String(pct).c_str());
+
+  delay(2000); // every 2 seconds
+}
