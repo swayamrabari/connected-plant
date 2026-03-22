@@ -19,7 +19,7 @@ function App() {
         username: 'Swayam',
         password: 'Swym(232459)',
         clientId: `react_${Math.random().toString(16).slice(2)}`,
-      }
+      },
     );
 
     clientRef.current = client;
@@ -31,6 +31,22 @@ function App() {
         'plant/pump/status',
         'plant/auto/status',
       ]);
+    });
+
+    client.on('reconnect', () => {
+      setConnection('Reconnecting');
+    });
+
+    client.on('offline', () => {
+      setConnection('Offline');
+    });
+
+    client.on('close', () => {
+      setConnection('Disconnected');
+    });
+
+    client.on('error', () => {
+      setConnection('Error');
     });
 
     client.on('message', (topic, message) => {
@@ -50,7 +66,10 @@ function App() {
       }
     });
 
-    return () => client.end(true);
+    return () => {
+      setConnection('Disconnected');
+      client.end(true);
+    };
   }, []);
 
   // ---------- ANIMATION ----------
@@ -81,10 +100,31 @@ function App() {
     clientRef.current?.publish('plant/pump', pumpOn ? 'OFF' : 'ON');
   };
 
+  const getConnectionStyles = () => {
+    if (connection === 'Connected')
+      return 'bg-green-500/15 text-green-400 border-green-500/40';
+    if (connection === 'Reconnecting')
+      return 'bg-yellow-500/15 text-yellow-400 border-yellow-500/40';
+    if (connection === 'Connecting')
+      return 'bg-blue-500/15 text-blue-400 border-blue-500/40';
+    if (connection === 'Offline')
+      return 'bg-orange-500/15 text-orange-400 border-orange-500/40';
+    return 'bg-red-500/15 text-red-400 border-red-500/40';
+  };
+
   // ---------- UI ----------
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-6">
       <div className="w-full max-w-[320px] bg-zinc-950 rounded-3xl p-6 border border-zinc-900">
+        <div className="mb-4 flex justify-center">
+          <div
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${getConnectionStyles()}`}
+          >
+            <span className="h-2 w-2 rounded-full bg-current" />
+            MQTT Cloud: {connection}
+          </div>
+        </div>
+
         <p className="text-center text-zinc-500 text-sm">SOIL MOISTURE</p>
         <p className="text-center text-5xl font-bold text-white mt-2">
           {Math.round(displayedMoisture)}%
@@ -125,8 +165,8 @@ function App() {
           {autoMode
             ? 'Automatic watering enabled'
             : pumpOn
-            ? 'Pump is running'
-            : 'Manual mode'}
+              ? 'Pump is running'
+              : 'Manual mode'}
         </p>
       </div>
     </div>
